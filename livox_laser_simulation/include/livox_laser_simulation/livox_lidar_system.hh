@@ -1,0 +1,100 @@
+#ifndef LIVOX_LASER_SIMULATION_LIVOX_LIDAR_SYSTEM_HH_
+#define LIVOX_LASER_SIMULATION_LIVOX_LIDAR_SYSTEM_HH_
+
+#include <gz/common/Event.hh>
+#include <gz/math/Pose3.hh>
+#include <gz/sim/EntityComponentManager.hh>
+#include <gz/sim/EventManager.hh>
+#include <gz/sim/System.hh>
+
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <tf2_ros/transform_broadcaster.h>
+
+#include <chrono>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+
+#include "livox_laser_simulation/livox_raycaster.hh"
+#include "livox_laser_simulation/msg/custom_msg.hpp"
+
+namespace livox_laser_simulation
+{
+
+enum class PointCloudType
+{
+  SENSOR_MSG_POINT_CLOUD2_POINTXYZ = 1,
+  SENSOR_MSG_POINT_CLOUD2_LIVOXPOINTXYZRTLT = 2,
+  LIVOX_LASER_SIMULATION_CUSTOM_MSG = 3,
+};
+
+class LivoxLidarSystem : public gz::sim::System,
+                         public gz::sim::ISystemConfigure,
+                         public gz::sim::ISystemPostUpdate
+{
+public:
+  LivoxLidarSystem() = default;
+  ~LivoxLidarSystem() override = default;
+
+  void Configure(const gz::sim::Entity &_entity,
+                 const std::shared_ptr<const sdf::Element> &_sdf,
+                 gz::sim::EntityComponentManager &_ecm,
+                 gz::sim::EventManager &_event_mgr) override;
+
+  void PostUpdate(const gz::sim::UpdateInfo &_info,
+                  const gz::sim::EntityComponentManager &_ecm) override;
+
+private:
+  void InitializeROS();
+  void OnPreRender();
+  void PublishPointCloud(const std::vector<LivoxRayResult> &_results,
+                         const rclcpp::Time &_stamp);
+  void PublishPointCloud2(const std::vector<LivoxRayResult> &_results,
+                          const rclcpp::Time &_stamp, bool _livox_fields);
+  void PublishLivoxCustomMsg(const std::vector<LivoxRayResult> &_results,
+                             const rclcpp::Time &_stamp);
+  void BroadcastTF(const rclcpp::Time &_stamp);
+
+  gz::sim::Entity sensor_entity_{gz::sim::kNullEntity};
+  gz::sim::Entity parent_entity_{gz::sim::kNullEntity};
+  std::string sensor_name_;
+  std::string parent_name_;
+  gz::math::Pose3d sensor_pose_;
+  gz::math::Pose3d parent_pose_;
+
+  std::unique_ptr<LivoxRaycaster> raycaster_;
+  std::string csv_file_name_;
+  std::string ros_topic_{"/livox/lidar"};
+  std::string frame_name_;
+  int sample_step_{20000};
+  int downsample_{1};
+  int line_count_{4};
+  PointCloudType publish_pointcloud_type_{
+    PointCloudType::SENSOR_MSG_POINT_CLOUD2_LIVOXPOINTXYZRTLT};
+  double min_dist_{0.1};
+  double max_dist_{40.0};
+  double update_rate_{10.0};
+  double point_rate_{200000.0};
+  bool use_inf_{false};
+
+  size_t curr_start_index_{0};
+  std::chrono::steady_clock::duration sim_time_{};
+  std::chrono::steady_clock::duration last_update_time_{};
+  bool first_update_{true};
+  bool update_pending_{false};
+  bool scene_initialized_{false};
+  bool configured_{false};
+
+  rclcpp::Node::SharedPtr ros_node_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub_;
+  rclcpp::Publisher<livox_laser_simulation::msg::CustomMsg>::SharedPtr custom_msg_pub_;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  gz::common::ConnectionPtr pre_render_connection_;
+  std::mutex mutex_;
+};
+
+}  // namespace livox_laser_simulation
+
+#endif  // LIVOX_LASER_SIMULATION_LIVOX_LIDAR_SYSTEM_HH_
