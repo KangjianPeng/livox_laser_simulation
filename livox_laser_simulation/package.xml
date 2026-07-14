@@ -18,12 +18,16 @@
   <depend>ament_index_cpp</depend>
 
   <depend>ignition-gazebo6</depend>
-  <depend>ignition-rendering6</depend>
+  <depend>ignition-msgs8</depend>
+  <depend>ignition-transport11</depend>
 
   <exec_depend>ros_gz_bridge</exec_depend>
   <exec_depend>ros_gz_sim</exec_depend>
+  <exec_depend>ignition-rendering6</exec_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
   <exec_depend>rviz2</exec_depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
 
   <member_of_group>rosidl_interface_packages</member_of_group>
 

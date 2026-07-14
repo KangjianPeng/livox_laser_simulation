@@ -2,12 +2,10 @@
 
 #include <gz/common/Console.hh>
 #include <gz/plugin/Register.hh>
-#include <gz/rendering/RenderingIface.hh>
 #include <gz/sim/Util.hh>
 #include <gz/sim/components/Name.hh>
 #include <gz/sim/components/ParentEntity.hh>
 #include <gz/sim/components/Sensor.hh>
-#include <gz/sim/rendering/Events.hh>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
@@ -16,7 +14,6 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
-#include <functional>
 #include <utility>
 
 namespace livox_laser_simulation
@@ -46,12 +43,14 @@ void WriteValue(std::vector<uint8_t> &_data, size_t _offset, const T &_value)
 {
   std::memcpy(_data.data() + _offset, &_value, sizeof(T));
 }
+
 }  // namespace
 
 void LivoxLidarSystem::Configure(const gz::sim::Entity &_entity,
   const std::shared_ptr<const sdf::Element> &_sdf,
   gz::sim::EntityComponentManager &_ecm, gz::sim::EventManager &_event_mgr)
 {
+  (void)_event_mgr;
   const auto sensor_component = _ecm.Component<gz::sim::components::Sensor>(_entity);
   const auto name_component = _ecm.Component<gz::sim::components::Name>(_entity);
   const auto parent_component =
@@ -70,6 +69,7 @@ void LivoxLidarSystem::Configure(const gz::sim::Entity &_entity,
     parent_name_ = parent_name->Data();
 
   csv_file_name_ = SdfValue<std::string>(_sdf, "csv_file_name", "");
+  gpu_topic_ = SdfValue<std::string>(_sdf, "gpu_topic", gpu_topic_);
   ros_topic_ = SdfValue<std::string>(_sdf, "ros_topic", ros_topic_);
   frame_name_ = SdfValue<std::string>(_sdf, "frame_name", sensor_name_);
   sample_step_ = std::max(1, SdfValue<int>(_sdf, "samples", sample_step_));
@@ -77,7 +77,6 @@ void LivoxLidarSystem::Configure(const gz::sim::Entity &_entity,
   line_count_ = SdfValue<int>(_sdf, "line_count", line_count_);
   min_dist_ = SdfValue<double>(_sdf, "min_range", min_dist_);
   max_dist_ = SdfValue<double>(_sdf, "max_range", max_dist_);
-  update_rate_ = SdfValue<double>(_sdf, "update_rate", update_rate_);
   point_rate_ = SdfValue<double>(_sdf, "point_rate", point_rate_);
   use_inf_ = SdfValue<bool>(_sdf, "use_inf", use_inf_);
 
@@ -107,20 +106,33 @@ void LivoxLidarSystem::Configure(const gz::sim::Entity &_entity,
     return;
   }
 
-  raycaster_ = std::make_unique<LivoxRaycaster>();
-  raycaster_->SetParameters(downsample_, min_dist_, max_dist_, use_inf_);
-  if (!raycaster_->LoadScanPattern(csv_file_name_, line_count_, point_rate_))
+  depth_sampler_ = std::make_unique<LivoxDepthSampler>();
+  depth_sampler_->SetParameters(downsample_, min_dist_, max_dist_, use_inf_);
+  if (!depth_sampler_->LoadScanPattern(
+      csv_file_name_, line_count_, point_rate_))
   {
     ignerr << "Failed to load scan pattern: [" << csv_file_name_ << "].\n";
     return;
   }
 
   InitializeROS();
-  pre_render_connection_ = _event_mgr.Connect<gz::sim::events::PreRender>(
-    std::bind(&LivoxLidarSystem::OnPreRender, this));
-  configured_ = true;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    configured_ = true;
+  }
+  if (!transport_node_.Subscribe(
+      gpu_topic_, &LivoxLidarSystem::OnGpuScan, this))
+  {
+    ignerr << "Failed to subscribe to GPU lidar topic [" << gpu_topic_
+           << "].\n";
+    std::lock_guard<std::mutex> lock(mutex_);
+    configured_ = false;
+    return;
+  }
+
   ignmsg << "Livox lidar [" << sensor_name_ << "] publishing [" << ros_topic_
-        << "] with " << raycaster_->PointCount() << " scan pattern points.\n";
+        << "] with " << depth_sampler_->PointCount()
+        << " scan pattern points from GPU topic [" << gpu_topic_ << "].\n";
 }
 
 void LivoxLidarSystem::InitializeROS()
@@ -155,58 +167,72 @@ void LivoxLidarSystem::PostUpdate(const gz::sim::UpdateInfo &_info,
   sensor_pose_ = gz::sim::worldPose(sensor_entity_, _ecm);
   parent_pose_ = gz::sim::worldPose(parent_entity_, _ecm);
   sim_time_ = _info.simTime;
-
-  const auto period = update_rate_ > 0.0
-    ? std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-        std::chrono::duration<double>(1.0 / update_rate_))
-    : std::chrono::steady_clock::duration::zero();
-  if (first_update_ || sim_time_ - last_update_time_ >= period)
-  {
-    first_update_ = false;
-    last_update_time_ = sim_time_;
-    update_pending_ = true;
-  }
 }
 
-void LivoxLidarSystem::OnPreRender()
+void LivoxLidarSystem::OnGpuScan(const gz::msgs::LaserScan &_scan)
 {
+  const unsigned int width = _scan.count();
+  const unsigned int height = std::max(1u, _scan.vertical_count());
+  const size_t pixel_count = static_cast<size_t>(width) * height;
+  if (width < 2 || height < 2 ||
+      static_cast<size_t>(_scan.ranges_size()) < pixel_count)
+  {
+    ignerr << "Invalid GPU distance image on [" << gpu_topic_ << "]: "
+           << width << "x" << height << " with " << _scan.ranges_size()
+           << " ranges.\n";
+    return;
+  }
+
+  if (!depth_sampler_->SetDepthImageAngles(
+      _scan.angle_min(), _scan.angle_max(), _scan.vertical_angle_min(),
+      _scan.vertical_angle_max()))
+  {
+    ignerr << "Invalid GPU lidar angular range on [" << gpu_topic_ << "].\n";
+    return;
+  }
+  if (!depth_sampler_->ScanPatternFitsDepthImage())
+  {
+    if (!grid_error_reported_)
+    {
+      ignerr << "GPU lidar angular range on [" << gpu_topic_
+             << "] does not cover scan pattern [" << csv_file_name_
+             << "].\n";
+      grid_error_reported_ = true;
+    }
+    return;
+  }
+
   gz::math::Pose3d sensor_pose;
+  gz::math::Pose3d parent_pose;
   std::chrono::steady_clock::duration sim_time;
   size_t start_index;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!configured_ || !update_pending_)
+    if (!configured_)
       return;
+
     sensor_pose = sensor_pose_;
+    parent_pose = parent_pose_;
     sim_time = sim_time_;
     start_index = curr_start_index_;
-    update_pending_ = false;
-  }
-
-  if (!scene_initialized_)
-  {
-    scene_initialized_ = raycaster_->SetScene(
-      gz::rendering::sceneFromFirstRenderEngine());
-    if (!scene_initialized_)
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      update_pending_ = true;
-      return;
-    }
-  }
-
-  const auto results =
-    raycaster_->CastRays(start_index, sample_step_, sensor_pose);
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
     curr_start_index_ = (start_index + static_cast<size_t>(sample_step_)) %
-      raycaster_->PointCount();
+      depth_sampler_->PointCount();
   }
 
-  const auto nanoseconds =
-    std::chrono::duration_cast<std::chrono::nanoseconds>(sim_time).count();
+  const auto results = depth_sampler_->SampleDepthImage(
+    _scan.ranges().data(), width, height, start_index, sample_step_);
+  if (results.empty())
+    return;
+
+  auto nanoseconds = _scan.header().stamp().sec() * 1000000000LL +
+    _scan.header().stamp().nsec();
+  if (nanoseconds == 0)
+  {
+    nanoseconds =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(sim_time).count();
+  }
   const rclcpp::Time stamp(nanoseconds, RCL_ROS_TIME);
-  BroadcastTF(stamp);
+  BroadcastTF(stamp, parent_pose, sensor_pose);
   PublishPointCloud(results, stamp);
   rclcpp::spin_some(ros_node_);
 }
@@ -306,13 +332,15 @@ void LivoxLidarSystem::PublishLivoxCustomMsg(
   custom_msg_pub_->publish(std::move(cloud));
 }
 
-void LivoxLidarSystem::BroadcastTF(const rclcpp::Time &_stamp)
+void LivoxLidarSystem::BroadcastTF(
+  const rclcpp::Time &_stamp, const gz::math::Pose3d &_parent_pose,
+  const gz::math::Pose3d &_sensor_pose)
 {
   geometry_msgs::msg::TransformStamped transform;
   transform.header.stamp = _stamp;
   transform.header.frame_id = parent_name_;
   transform.child_frame_id = frame_name_;
-  const auto relative_pose = parent_pose_.Inverse() * sensor_pose_;
+  const auto relative_pose = _parent_pose.Inverse() * _sensor_pose;
   transform.transform.translation.x = relative_pose.Pos().X();
   transform.transform.translation.y = relative_pose.Pos().Y();
   transform.transform.translation.z = relative_pose.Pos().Z();

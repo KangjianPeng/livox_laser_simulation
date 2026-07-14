@@ -41,16 +41,16 @@
         <ray>
           <scan>
             <horizontal>
-              <samples>1</samples>
+              <samples>3601</samples>
               <resolution>1</resolution>
-              <min_angle>0</min_angle>
-              <max_angle>0</max_angle>
+              <min_angle>-3.141592653589793</min_angle>
+              <max_angle>3.141592653589793</max_angle>
             </horizontal>
             <vertical>
-              <samples>1</samples>
+              <samples>595</samples>
               <resolution>1</resolution>
-              <min_angle>0</min_angle>
-              <max_angle>0</max_angle>
+              <min_angle>-0.125878381641587</min_angle>
+              <max_angle>0.910433551010322</max_angle>
             </vertical>
           </scan>
           <range>
@@ -61,14 +61,14 @@
         </ray>
 
         <plugin name="livox_laser_simulation::LivoxLidarSystem" filename="liblivox_laser_simulation.so">
+          <gpu_topic>/livox/lidar/scan</gpu_topic>
           <csv_file_name>mid360.csv</csv_file_name>
           <samples>20000</samples>
-          <downsample>10</downsample>
+          <downsample>1</downsample>
           <line_count>4</line_count>
           <point_rate>200000</point_rate>
           <min_range>0.1</min_range>
           <max_range>40.0</max_range>
-          <update_rate>10.0</update_rate>
           <publish_pointcloud_type>2</publish_pointcloud_type>
           <ros_topic>/livox/lidar</ros_topic>
           <frame_name>livox_frame</frame_name>

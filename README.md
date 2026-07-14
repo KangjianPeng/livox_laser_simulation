@@ -17,6 +17,8 @@ Classic 11 and ROS 1 sources have been removed.
 - Supports XYZ, Livox-style PointCloud2, and Livox custom message output.
 - Uses simulation time for message headers and per-point timestamps.
 - Supports GUI and server-only headless rendering.
+- Uses Ogre2 `GpuRays` to render one regular distance image per scan and maps
+  measured Livox directions to the nearest GPU pixel.
 - Resolves scan patterns from the installed package, so SDF files are portable.
 
 ![Undistorted point cloud comparison](./images/undistort.png)
@@ -35,6 +37,19 @@ Classic 11 and ROS 1 sources have been removed.
 The packaged SDF model is a Mid-360 example. The plugin itself is model
 independent: select another pattern file and its matching line count and point
 rate when embedding it in a robot model.
+
+The `gpu_lidar` angular grid must cover the selected scan pattern. The following
+counts keep the angular spacing at or below approximately 0.1 degrees when the
+grid limits are set to the measured pattern limits:
+
+| Model | Horizontal range (deg) | Vertical range (deg) | Minimum grid |
+| --- | ---: | ---: | ---: |
+| Livox Avia | -35.310 to 35.309 | -38.591 to 38.591 | 708 x 773 |
+| Livox Horizon | -40.957 to 40.959 | -14.092 to 14.092 | 821 x 283 |
+| Livox Mid-40 | -19.173 to 19.173 | -19.173 to 19.173 | 385 x 385 |
+| Livox Mid-70 | -35.215 to 35.216 | -35.216 to 35.215 | 706 x 706 |
+| Livox Mid-360 | -180.000 to 180.000 | -7.212 to 52.164 | 3601 x 595 |
+| Livox Tele-15 | -7.324 to 7.324 | -8.127 to 8.127 | 148 x 164 |
 
 ## Supported Environment
 
@@ -101,9 +116,9 @@ ros2 topic echo /livox/lidar --once --field fields
 
 ## Add The Plugin To A Model
 
-The plugin must be attached to an SDF sensor. The `gpu_lidar` sensor causes
-Gazebo's Sensors system to create and maintain the server rendering scene used
-for ray intersection queries.
+The plugin must be attached to an SDF `gpu_lidar` sensor. Ogre2 renders the
+configured regular distance image on the GPU, and the plugin samples that image
+at the directions from the selected Livox pattern.
 
 ```xml
 <sensor type="gpu_lidar" name="livox_mid360">
@@ -115,16 +130,16 @@ for ray intersection queries.
   <ray>
     <scan>
       <horizontal>
-        <samples>1</samples>
+        <samples>3601</samples>
         <resolution>1</resolution>
-        <min_angle>0</min_angle>
-        <max_angle>0</max_angle>
+        <min_angle>-3.141592653589793</min_angle>
+        <max_angle>3.141592653589793</max_angle>
       </horizontal>
       <vertical>
-        <samples>1</samples>
+        <samples>595</samples>
         <resolution>1</resolution>
-        <min_angle>0</min_angle>
-        <max_angle>0</max_angle>
+        <min_angle>-0.125878381641587</min_angle>
+        <max_angle>0.910433551010322</max_angle>
       </vertical>
     </scan>
     <range>
@@ -135,14 +150,14 @@ for ray intersection queries.
   </ray>
   <plugin filename="liblivox_laser_simulation.so"
           name="livox_laser_simulation::LivoxLidarSystem">
+    <gpu_topic>/livox/lidar/scan</gpu_topic>
     <csv_file_name>mid360.csv</csv_file_name>
     <samples>20000</samples>
-    <downsample>10</downsample>
+    <downsample>1</downsample>
     <line_count>4</line_count>
     <point_rate>200000</point_rate>
     <min_range>0.1</min_range>
     <max_range>40.0</max_range>
-    <update_rate>10.0</update_rate>
     <publish_pointcloud_type>2</publish_pointcloud_type>
     <ros_topic>/livox/lidar</ros_topic>
     <frame_name>livox_frame</frame_name>
@@ -151,9 +166,11 @@ for ray intersection queries.
 </sensor>
 ```
 
-The built-in `gpu_lidar` scan is intentionally 1x1 and is not published to
-ROS. It only keeps Gazebo's rendering scene active; the plugin performs the
-actual Livox ray queries from the selected CSV pattern.
+The sensor `<topic>` and plugin `gpu_topic` values must match. The native
+Gazebo scan activates the scheduled `GpuRays` render; the plugin subscribes
+inside the Gazebo process, samples the distance image, and publishes only the
+Livox-pattern points to ROS. The sensor `update_rate` is therefore also the ROS
+point-cloud publication rate.
 
 The world must load the Sensors system with a rendering engine:
 
@@ -171,14 +188,14 @@ provided launch file configures both variables automatically.
 
 | Parameter | Default | Description |
 | --- | --- | --- |
+| `gpu_topic` | `/livox/lidar/scan` | Native Gazebo `gpu_lidar` topic containing the regular distance image. |
 | `csv_file_name` | required | Absolute path or a filename under the package `scan_patterns` directory. |
 | `samples` | `20000` | Number of consecutive pattern entries advanced per publication. |
-| `downsample` | `1` | Reduce ray queries by N while balancing the configured interleaved lines. |
+| `downsample` | `1` | Sample one pattern entry from each block of N while balancing interleaved lines. |
 | `line_count` | `4` | Number of interleaved laser lines in the selected pattern. |
 | `point_rate` | `200000` | Device point rate in points per second, used for per-point timestamps. |
 | `min_range` | `0.1` | Minimum accepted range in metres. |
 | `max_range` | `40.0` | Maximum accepted range in metres. |
-| `update_rate` | `10.0` | Requested publication rate in Hz. Expensive ray queries may limit the achieved rate. |
 | `ros_topic` | `/livox/lidar` | ROS 2 output topic. |
 | `frame_name` | sensor name | Point cloud child frame. |
 | `use_inf` | `false` | Emit max-range points when no object is hit. |
@@ -190,20 +207,20 @@ Output types:
 - `2`: PointCloud2 fields `x`, `y`, `z`, `intensity`, `tag`, `line`, `timestamp`.
 - `3`: `livox_laser_simulation/msg/CustomMsg` with per-point `offset_time`.
 
-`samples / downsample` is the number of rendering ray queries per update. The
-Mid-360 example advances the full 20,000 pattern entries at 10 Hz so scan timing
-and pattern progression match the 200,000 point/s device rate. It queries one
-ray from each block of 10 entries, resulting in 2,000 rendering queries per
-update and 20,000 per second. Each block contributes a ray from the least
-represented scan line, preventing downsampling from repeatedly selecting only a
-subset of the four lines.
+`samples / downsample` is the maximum number of Livox-pattern points sampled
+from each GPU distance image. Rendering cost is determined by the horizontal
+and vertical `<samples>` under the SDF `<ray><scan>` element, not by this plugin
+parameter. The Mid-360 example advances and samples all 20,000 pattern entries
+at 10 Hz, matching the 200,000 point/s device rate without CPU ray queries.
 
-Gazebo Rendering evaluates these ray queries individually. On the tested host,
-the example produced about 1,460 valid wall returns per frame at 9.4 Hz wall
-time while preserving a 10 Hz simulation-time rate. Set `downsample` closer to
-`1` only when the host can absorb the additional rendering cost; `1` performs
-the full 200,000 ray queries per second.
+The nearest GPU pixel determines both range and output direction. This avoids
+interpolating across depth discontinuities; angular accuracy is bounded by half
+the GPU grid spacing. In the packaged 0.1-degree Mid-360 grid, the test-room
+wall error was at most about 1.3 mm. On the tested Iris Xe host, the example
+maintained 10 Hz wall time and a real-time factor of 1.0 with roughly 14,600
+valid wall returns per frame.
 
-## Acknoledgements
-https://github.com/fratopa/Mid360_simulation_plugin
-https://github.com/Livox-SDK/livox_laser_simulation
+## Acknowledgements
+
+- https://github.com/fratopa/Mid360_simulation_plugin
+- https://github.com/Livox-SDK/livox_laser_simulation

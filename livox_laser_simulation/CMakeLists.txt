@@ -13,7 +13,8 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(ignition-gazebo6 REQUIRED)
-find_package(ignition-rendering6 REQUIRED)
+find_package(ignition-msgs8 REQUIRED)
+find_package(ignition-transport11 REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -28,7 +29,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
 add_library(livox_laser_simulation_plugin SHARED
   src/livox_laser_simulation/livox_lidar_system.cpp
-  src/livox_laser_simulation/livox_raycaster.cpp
+  src/livox_laser_simulation/livox_depth_sampler.cpp
 )
 set_target_properties(livox_laser_simulation_plugin PROPERTIES
   OUTPUT_NAME livox_laser_simulation)
@@ -40,7 +41,8 @@ ament_target_dependencies(livox_laser_simulation_plugin
   ament_index_cpp
   geometry_msgs
   ignition-gazebo6
-  ignition-rendering6
+  ignition-msgs8
+  ignition-transport11
   rclcpp
   sensor_msgs
   tf2_ros
@@ -48,6 +50,15 @@ ament_target_dependencies(livox_laser_simulation_plugin
 rosidl_get_typesupport_target(cpp_typesupport_target
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(livox_laser_simulation_plugin "${cpp_typesupport_target}")
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_depth_sampler test/test_depth_sampler.cpp)
+  target_include_directories(test_depth_sampler PRIVATE include)
+  target_link_libraries(test_depth_sampler livox_laser_simulation_plugin)
+  target_compile_definitions(test_depth_sampler PRIVATE
+    TEST_SCAN_PATTERN="${CMAKE_CURRENT_SOURCE_DIR}/test/data/cardinal.csv")
+endif()
 
 install(TARGETS livox_laser_simulation_plugin LIBRARY DESTINATION lib)
 install(DIRECTORY assets launch models rviz scan_patterns worlds

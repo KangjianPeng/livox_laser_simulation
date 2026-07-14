@@ -1,11 +1,12 @@
 #ifndef LIVOX_LASER_SIMULATION_LIVOX_LIDAR_SYSTEM_HH_
 #define LIVOX_LASER_SIMULATION_LIVOX_LIDAR_SYSTEM_HH_
 
-#include <gz/common/Event.hh>
 #include <gz/math/Pose3.hh>
+#include <gz/msgs/laserscan.pb.h>
 #include <gz/sim/EntityComponentManager.hh>
 #include <gz/sim/EventManager.hh>
 #include <gz/sim/System.hh>
+#include <gz/transport/Node.hh>
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -17,7 +18,7 @@
 #include <string>
 #include <vector>
 
-#include "livox_laser_simulation/livox_raycaster.hh"
+#include "livox_laser_simulation/livox_depth_sampler.hh"
 #include "livox_laser_simulation/msg/custom_msg.hpp"
 
 namespace livox_laser_simulation
@@ -48,14 +49,16 @@ public:
 
 private:
   void InitializeROS();
-  void OnPreRender();
+  void OnGpuScan(const gz::msgs::LaserScan &_scan);
   void PublishPointCloud(const std::vector<LivoxRayResult> &_results,
                          const rclcpp::Time &_stamp);
   void PublishPointCloud2(const std::vector<LivoxRayResult> &_results,
                           const rclcpp::Time &_stamp, bool _livox_fields);
   void PublishLivoxCustomMsg(const std::vector<LivoxRayResult> &_results,
                              const rclcpp::Time &_stamp);
-  void BroadcastTF(const rclcpp::Time &_stamp);
+  void BroadcastTF(const rclcpp::Time &_stamp,
+                   const gz::math::Pose3d &_parent_pose,
+                   const gz::math::Pose3d &_sensor_pose);
 
   gz::sim::Entity sensor_entity_{gz::sim::kNullEntity};
   gz::sim::Entity parent_entity_{gz::sim::kNullEntity};
@@ -64,8 +67,9 @@ private:
   gz::math::Pose3d sensor_pose_;
   gz::math::Pose3d parent_pose_;
 
-  std::unique_ptr<LivoxRaycaster> raycaster_;
+  std::unique_ptr<LivoxDepthSampler> depth_sampler_;
   std::string csv_file_name_;
+  std::string gpu_topic_{"/livox/lidar/scan"};
   std::string ros_topic_{"/livox/lidar"};
   std::string frame_name_;
   int sample_step_{20000};
@@ -75,24 +79,21 @@ private:
     PointCloudType::SENSOR_MSG_POINT_CLOUD2_LIVOXPOINTXYZRTLT};
   double min_dist_{0.1};
   double max_dist_{40.0};
-  double update_rate_{10.0};
   double point_rate_{200000.0};
   bool use_inf_{false};
 
   size_t curr_start_index_{0};
   std::chrono::steady_clock::duration sim_time_{};
-  std::chrono::steady_clock::duration last_update_time_{};
-  bool first_update_{true};
-  bool update_pending_{false};
-  bool scene_initialized_{false};
   bool configured_{false};
+  bool grid_error_reported_{false};
 
   rclcpp::Node::SharedPtr ros_node_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub_;
   rclcpp::Publisher<livox_laser_simulation::msg::CustomMsg>::SharedPtr custom_msg_pub_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-  gz::common::ConnectionPtr pre_render_connection_;
   std::mutex mutex_;
+  // Destroy the subscriber before state used by its callback.
+  gz::transport::Node transport_node_;
 };
 
 }  // namespace livox_laser_simulation
