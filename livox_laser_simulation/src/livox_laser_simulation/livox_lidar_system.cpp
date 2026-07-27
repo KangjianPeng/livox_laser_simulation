@@ -75,10 +75,14 @@ void LivoxLidarSystem::Configure(const gz::sim::Entity &_entity,
   sample_step_ = std::max(1, SdfValue<int>(_sdf, "samples", sample_step_));
   downsample_ = std::max(1, SdfValue<int>(_sdf, "downsample", downsample_));
   line_count_ = SdfValue<int>(_sdf, "line_count", line_count_);
+  startup_skip_scans_ = static_cast<size_t>(std::max(
+    0, SdfValue<int>(_sdf, "startup_skip_scans", 0)));
   min_dist_ = SdfValue<double>(_sdf, "min_range", min_dist_);
   max_dist_ = SdfValue<double>(_sdf, "max_range", max_dist_);
   point_rate_ = SdfValue<double>(_sdf, "point_rate", point_rate_);
   use_inf_ = SdfValue<bool>(_sdf, "use_inf", use_inf_);
+  publish_point_time_offsets_ = SdfValue<bool>(
+    _sdf, "publish_point_time_offsets", publish_point_time_offsets_);
 
   if (line_count_ < 1 || line_count_ > 256 || point_rate_ <= 0.0)
   {
@@ -202,6 +206,9 @@ void LivoxLidarSystem::OnGpuScan(const gz::msgs::LaserScan &_scan)
     return;
   }
 
+  if (startup_scans_seen_++ < startup_skip_scans_)
+    return;
+
   gz::math::Pose3d sensor_pose;
   gz::math::Pose3d parent_pose;
   std::chrono::steady_clock::duration sim_time;
@@ -295,8 +302,8 @@ void LivoxLidarSystem::PublishPointCloud2(
     {
       const float intensity = static_cast<float>(_results[i].intensity);
       const uint8_t tag = 0x10;
-      const double timestamp =
-        base_time + static_cast<double>(_results[i].offset_time) * 1e-9;
+      const double timestamp = base_time + (publish_point_time_offsets_ ?
+        static_cast<double>(_results[i].offset_time) * 1e-9 : 0.0);
       WriteValue(cloud.data, base + 12, intensity);
       WriteValue(cloud.data, base + 16, tag);
       WriteValue(cloud.data, base + 17, _results[i].line);
@@ -319,7 +326,7 @@ void LivoxLidarSystem::PublishLivoxCustomMsg(
   for (const auto &result : _results)
   {
     msg::CustomPoint point;
-    point.offset_time = result.offset_time;
+    point.offset_time = publish_point_time_offsets_ ? result.offset_time : 0u;
     point.x = static_cast<float>(result.point.X());
     point.y = static_cast<float>(result.point.Y());
     point.z = static_cast<float>(result.point.Z());
@@ -353,10 +360,10 @@ void LivoxLidarSystem::BroadcastTF(
 
 }  // namespace livox_laser_simulation
 
-IGNITION_ADD_PLUGIN(livox_laser_simulation::LivoxLidarSystem,
+GZ_ADD_PLUGIN(livox_laser_simulation::LivoxLidarSystem,
               gz::sim::System,
               livox_laser_simulation::LivoxLidarSystem::ISystemConfigure,
               livox_laser_simulation::LivoxLidarSystem::ISystemPostUpdate)
 
-IGNITION_ADD_PLUGIN_ALIAS(livox_laser_simulation::LivoxLidarSystem,
+GZ_ADD_PLUGIN_ALIAS(livox_laser_simulation::LivoxLidarSystem,
                     "livox_laser_simulation::LivoxLidarSystem")

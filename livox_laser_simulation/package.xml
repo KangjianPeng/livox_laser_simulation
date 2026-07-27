@@ -3,7 +3,7 @@
 <package format="3">
   <name>livox_laser_simulation</name>
   <version>0.0.0</version>
-  <description>Livox LiDAR simulation plugin for Ignition Gazebo (Gazebo Sim 6)</description>
+  <description>Livox LiDAR simulation plugin for Gazebo Harmonic (Gazebo Sim 8)</description>
   <maintainer email="lfc@todo.todo">lfc</maintainer>
   <license>TODO</license>
 
@@ -17,13 +17,13 @@
   <depend>geometry_msgs</depend>
   <depend>ament_index_cpp</depend>
 
-  <depend>ignition-gazebo6</depend>
-  <depend>ignition-msgs8</depend>
-  <depend>ignition-transport11</depend>
+  <depend>gz-sim8</depend>
+  <depend>gz-msgs10</depend>
+  <depend>gz-transport13</depend>
 
   <exec_depend>ros_gz_bridge</exec_depend>
   <exec_depend>ros_gz_sim</exec_depend>
-  <exec_depend>ignition-rendering6</exec_depend>
+  <exec_depend>gz-rendering8</exec_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
   <exec_depend>rviz2</exec_depend>
 

@@ -12,9 +12,9 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(ignition-gazebo6 REQUIRED)
-find_package(ignition-msgs8 REQUIRED)
-find_package(ignition-transport11 REQUIRED)
+find_package(gz-sim8 REQUIRED)
+find_package(gz-msgs10 REQUIRED)
+find_package(gz-transport13 REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -40,16 +40,18 @@ target_include_directories(livox_laser_simulation_plugin PRIVATE
 ament_target_dependencies(livox_laser_simulation_plugin
   ament_index_cpp
   geometry_msgs
-  ignition-gazebo6
-  ignition-msgs8
-  ignition-transport11
   rclcpp
   sensor_msgs
   tf2_ros
 )
 rosidl_get_typesupport_target(cpp_typesupport_target
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
-target_link_libraries(livox_laser_simulation_plugin "${cpp_typesupport_target}")
+target_link_libraries(livox_laser_simulation_plugin
+  "${cpp_typesupport_target}"
+  gz-sim8::gz-sim8
+  gz-msgs10::gz-msgs10
+  gz-transport13::gz-transport13
+)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)

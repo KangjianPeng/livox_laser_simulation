@@ -76,9 +76,9 @@ def generate_launch_description():
 
     return LaunchDescription([
         SetEnvironmentVariable(
-            'IGN_GAZEBO_SYSTEM_PLUGIN_PATH',
+            'GZ_SIM_SYSTEM_PLUGIN_PATH',
             os.path.join(package_prefix, 'lib')),
-        SetEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', resource_path),
+        SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', resource_path),
         world,
         model,
         entity_name,

@@ -1,13 +1,13 @@
 # Livox LiDAR Simulation
 
 A ROS 2 system plugin that simulates non-repetitive Livox scan patterns in
-Ignition Gazebo / Gazebo Sim. It is based on the original
+Gazebo Sim. It is based on the original
 [Livox Gazebo Classic plugin](https://github.com/Livox-SDK/livox_laser_simulation)
 and retains per-point timing and Livox-compatible output formats without a
 dependency on the Livox SDK or driver.
 
-This branch targets ROS 2 Humble and Ignition Gazebo 6 (Fortress). Gazebo
-Classic 11 and ROS 1 sources have been removed.
+This branch targets ROS 2 Humble and Gazebo Harmonic (Gazebo Sim 8). Gazebo
+Classic, Ignition Gazebo, and ROS 1 sources have been removed.
 
 ## Features
 
@@ -57,12 +57,12 @@ grid limits are set to the measured pattern limits:
 | --- | --- |
 | Ubuntu | 22.04 |
 | ROS 2 | Humble |
-| Ignition Gazebo | Fortress / Gazebo Sim 6.18 |
+| Gazebo Sim | Harmonic / Gazebo Sim 8 |
 | Compiler | GCC 11 |
 
 ## Dependencies
 
-Install ROS 2 Humble, Gazebo Fortress, and the ROS / Gazebo integration:
+Install ROS 2 Humble, Gazebo Harmonic, and the ROS / Gazebo integration:
 
 ```bash
 sudo apt update
@@ -180,8 +180,8 @@ The world must load the Sensors system with a rendering engine:
 </plugin>
 ```
 
-Ensure the package's `lib` directory is in `IGN_GAZEBO_SYSTEM_PLUGIN_PATH`
-and the parent of its share directory is in `IGN_GAZEBO_RESOURCE_PATH`. The
+Ensure the package's `lib` directory is in `GZ_SIM_SYSTEM_PLUGIN_PATH`
+and the parent of its share directory is in `GZ_SIM_RESOURCE_PATH`. The
 provided launch file configures both variables automatically.
 
 ## Plugin Parameters
@@ -220,7 +220,7 @@ wall error was at most about 1.3 mm. On the tested Iris Xe host, the example
 maintained 10 Hz wall time and a real-time factor of 1.0 with roughly 14,600
 valid wall returns per frame.
 
-## Acknowledgements
+## Acknowledgement
 
 - https://github.com/fratopa/Mid360_simulation_plugin
 - https://github.com/Livox-SDK/livox_laser_simulation
