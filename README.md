@@ -9,7 +9,7 @@ dependency on the Livox SDK or driver.
 This branch targets ROS 2 Humble and Gazebo Harmonic (Gazebo Sim 8). Gazebo
 Classic, Ignition Gazebo, and ROS 1 sources have been removed.
 
-## KangjianPeng Fork Changes
+## Fork Changes
 
 This fork upgrades the package for Gazebo Sim (Ignition) and uses Ogre2
 `GpuRays` to render regular distance images on the GPU before resampling them
