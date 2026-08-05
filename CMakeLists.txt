@@ -15,6 +15,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(gz-sim8 REQUIRED)
 find_package(gz-msgs10 REQUIRED)
 find_package(gz-transport13 REQUIRED)
+find_package(fast_livo REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -39,6 +40,7 @@ target_include_directories(livox_laser_simulation_plugin PRIVATE
 )
 ament_target_dependencies(livox_laser_simulation_plugin
   ament_index_cpp
+  fast_livo
   geometry_msgs
   rclcpp
   sensor_msgs

@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 
+#include <fast_livo/msg/custom_msg.hpp>
+
 #include "livox_laser_simulation/livox_depth_sampler.hh"
 #include "livox_laser_simulation/msg/custom_msg.hpp"
 
@@ -29,6 +31,7 @@ enum class PointCloudType
   SENSOR_MSG_POINT_CLOUD2_POINTXYZ = 1,
   SENSOR_MSG_POINT_CLOUD2_LIVOXPOINTXYZRTLT = 2,
   LIVOX_LASER_SIMULATION_CUSTOM_MSG = 3,
+  FAST_LIVO_CUSTOM_MSG = 4,
 };
 
 class LivoxLidarSystem : public gz::sim::System,
@@ -56,6 +59,8 @@ private:
                           const rclcpp::Time &_stamp, bool _livox_fields);
   void PublishLivoxCustomMsg(const std::vector<LivoxRayResult> &_results,
                              const rclcpp::Time &_stamp);
+  void PublishFastLivoCustomMsg(const std::vector<LivoxRayResult> &_results,
+                                const rclcpp::Time &_stamp);
   void BroadcastTF(const rclcpp::Time &_stamp,
                    const gz::math::Pose3d &_parent_pose,
                    const gz::math::Pose3d &_sensor_pose);
@@ -93,6 +98,7 @@ private:
   rclcpp::Node::SharedPtr ros_node_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub_;
   rclcpp::Publisher<livox_laser_simulation::msg::CustomMsg>::SharedPtr custom_msg_pub_;
+  rclcpp::Publisher<fast_livo::msg::CustomMsg>::SharedPtr fast_livo_custom_msg_pub_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   std::mutex mutex_;
   // Destroy the subscriber before state used by its callback.

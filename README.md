@@ -9,6 +9,13 @@ dependency on the Livox SDK or driver.
 This branch targets ROS 2 Humble and Gazebo Harmonic (Gazebo Sim 8). Gazebo
 Classic, Ignition Gazebo, and ROS 1 sources have been removed.
 
+## KangjianPeng Fork Changes
+
+This fork upgrades the package for Gazebo Sim (Ignition) and uses Ogre2
+`GpuRays` to render regular distance images on the GPU before resampling them
+with Livox scan patterns. It also adds a `fast_livo/msg/CustomMsg` output mode
+for the FAST-LIVO2 simulation pipeline.
+
 ## Features
 
 - Includes measured scan patterns for Avia, Horizon, Mid-40, Mid-70,
@@ -79,7 +86,7 @@ Clone the repository into a ROS 2 workspace and build it with `colcon`:
 ```bash
 mkdir -p ~/livox_ws/src
 cd ~/livox_ws/src
-git clone https://github.com/fratopa/Mid360_simulation_plugin.git livox_laser_simulation
+git clone https://github.com/KangjianPeng/livox_laser_simulation.git
 cd ..
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release

@@ -91,7 +91,7 @@ void LivoxLidarSystem::Configure(const gz::sim::Entity &_entity,
   }
 
   const int output_type = SdfValue<int>(_sdf, "publish_pointcloud_type", 2);
-  if (output_type < 1 || output_type > 3)
+  if (output_type < 1 || output_type > 4)
   {
     ignerr << "Invalid publish_pointcloud_type " << output_type << ".\n";
     return;
@@ -152,6 +152,11 @@ void LivoxLidarSystem::InitializeROS()
       PointCloudType::LIVOX_LASER_SIMULATION_CUSTOM_MSG)
   {
     custom_msg_pub_ = ros_node_->create_publisher<msg::CustomMsg>(ros_topic_, 5);
+  }
+  else if (publish_pointcloud_type_ == PointCloudType::FAST_LIVO_CUSTOM_MSG)
+  {
+    fast_livo_custom_msg_pub_ =
+      ros_node_->create_publisher<fast_livo::msg::CustomMsg>(ros_topic_, 5);
   }
   else
   {
@@ -253,6 +258,11 @@ void LivoxLidarSystem::PublishPointCloud(
     PublishLivoxCustomMsg(_results, _stamp);
     return;
   }
+  if (publish_pointcloud_type_ == PointCloudType::FAST_LIVO_CUSTOM_MSG)
+  {
+    PublishFastLivoCustomMsg(_results, _stamp);
+    return;
+  }
   PublishPointCloud2(_results, _stamp,
     publish_pointcloud_type_ ==
       PointCloudType::SENSOR_MSG_POINT_CLOUD2_LIVOXPOINTXYZRTLT);
@@ -337,6 +347,32 @@ void LivoxLidarSystem::PublishLivoxCustomMsg(
   }
   cloud.point_num = static_cast<uint32_t>(cloud.points.size());
   custom_msg_pub_->publish(std::move(cloud));
+}
+
+void LivoxLidarSystem::PublishFastLivoCustomMsg(
+  const std::vector<LivoxRayResult> &_results, const rclcpp::Time &_stamp)
+{
+  fast_livo::msg::CustomMsg cloud;
+  cloud.header.stamp = _stamp;
+  cloud.header.frame_id = frame_name_;
+  cloud.timebase = static_cast<uint64_t>(_stamp.nanoseconds());
+  cloud.lidar_id = 0;
+  cloud.rsvd = {0, 0, 0};
+  cloud.points.reserve(_results.size());
+  for (const auto &result : _results)
+  {
+    fast_livo::msg::CustomPoint point;
+    point.offset_time = publish_point_time_offsets_ ? result.offset_time : 0u;
+    point.x = static_cast<float>(result.point.X());
+    point.y = static_cast<float>(result.point.Y());
+    point.z = static_cast<float>(result.point.Z());
+    point.reflectivity = static_cast<uint8_t>(std::clamp(result.intensity, 0.0, 255.0));
+    point.tag = 0x10;
+    point.line = result.line;
+    cloud.points.push_back(point);
+  }
+  cloud.point_num = static_cast<uint32_t>(cloud.points.size());
+  fast_livo_custom_msg_pub_->publish(std::move(cloud));
 }
 
 void LivoxLidarSystem::BroadcastTF(
