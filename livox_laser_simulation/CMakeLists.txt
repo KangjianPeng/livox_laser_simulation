@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   pcl_conversions
+  livox_ros_driver
   message_generation
 )
 
@@ -44,7 +45,7 @@ include_directories(
 catkin_package(
         INCLUDE_DIRS include
         LIBRARIES livox_laser_simulation
-        CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs pcl_conversions message_runtime
+        CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs pcl_conversions livox_ros_driver message_runtime
 )
 
 add_library(livox_laser_simulation SHARED src/livox_points_plugin.cpp src/livox_ode_multiray_shape.cpp)
