@@ -65,8 +65,6 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
     auto scanElem = rayElem->GetElement("scan");
     auto rangeElem = rayElem->GetElement("range");
 
-    int argc = 0;
-    char **argv = nullptr;
     auto curr_scan_topic = sdf->Get<std::string>("ros_topic");
     frameName = sdf->Get<std::string>("frameName");
     ROS_INFO_STREAM("ros topic name:" << curr_scan_topic);
@@ -104,7 +102,14 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
 
     publishPointCloudType = sdfPtr->Get<int>("publish_pointcloud_type");
     ROS_INFO_STREAM("publish_pointcloud_type: " << publishPointCloudType);
-    ros::init(argc, argv, curr_scan_topic);
+    // gazebo_ros normally initializes roscpp before sensor plugins are loaded.
+    // Keep the standalone test model working too, but never reinitialize ROS
+    // with a topic name (which is not a valid node name).
+    if (!ros::isInitialized()) {
+        int argc = 0;
+        char **argv = nullptr;
+        ros::init(argc, argv, "livox_laser_simulation", ros::init_options::NoSigintHandler);
+    }
     rosNode.reset(new ros::NodeHandle);
     switch (publishPointCloudType) {
         case SENSOR_MSG_POINT_CLOUD:

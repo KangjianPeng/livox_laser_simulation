@@ -18,6 +18,19 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(gazebo REQUIRED)
 find_package(PCL REQUIRED)
 include_directories(${GAZEBO_INCLUDE_DIRS})
+
+# LivoxPointsPlugin derives from Gazebo's RayPlugin.  RayPlugin is shipped as
+# a loadable Gazebo plugin rather than one of ${GAZEBO_LIBRARIES}, so link it
+# explicitly; otherwise Gazebo cannot resolve the RayPlugin RTTI symbol when
+# it loads liblivox_laser_simulation.so.
+find_library(GAZEBO_RAY_PLUGIN
+  NAMES RayPlugin
+  PATHS ${GAZEBO_LIBRARY_DIRS}
+        /usr/lib/x86_64-linux-gnu/gazebo-11/plugins
+)
+if(NOT GAZEBO_RAY_PLUGIN)
+  message(FATAL_ERROR "Gazebo RayPlugin library was not found")
+endif()
 add_message_files(FILES
     CustomPoint.msg
     CustomMsg.msg
@@ -51,6 +64,7 @@ catkin_package(
 add_library(livox_laser_simulation SHARED src/livox_points_plugin.cpp src/livox_ode_multiray_shape.cpp)
 target_link_libraries(livox_laser_simulation
         ${GAZEBO_LIBRARIES}
+        ${GAZEBO_RAY_PLUGIN}
         ${catkin_LIBRARIES}
         ${PCL_LIBRARIES}
 )

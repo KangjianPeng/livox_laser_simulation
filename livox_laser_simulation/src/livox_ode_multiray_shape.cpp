@@ -69,6 +69,7 @@ void LivoxOdeMultiRayShape::UpdateRays()
         dSpaceCollide2((dGeomID) (this->superSpaceId),
                        (dGeomID) (ode->GetSpaceId()),
                        this, &UpdateCallback);
+
     }
 }
 
@@ -83,16 +84,23 @@ void LivoxOdeMultiRayShape::UpdateCallback(void *_data, dGeomID _o1, dGeomID _o2
     // Check space
     if (dGeomIsSpace(_o1) || dGeomIsSpace(_o2))
     {
-        if (dGeomGetSpace(_o1) == self->superSpaceId ||
-            dGeomGetSpace(_o2) == self->superSpaceId)
-            dSpaceCollide2(_o1, _o2, self, &UpdateCallback);
-
-        if (dGeomGetSpace(_o1) == self->raySpaceId ||
+        // dSpaceCollide2 initially calls us with the top-level superSpace.
+        // Its parent is null, so checking only dGeomGetSpace(superSpace)
+        // skips the nested raySpace entirely on Gazebo 11.
+        if (_o1 == reinterpret_cast<dGeomID>(self->superSpaceId) ||
+            _o2 == reinterpret_cast<dGeomID>(self->superSpaceId) ||
+            _o1 == reinterpret_cast<dGeomID>(self->raySpaceId) ||
+            _o2 == reinterpret_cast<dGeomID>(self->raySpaceId) ||
+            dGeomGetSpace(_o1) == self->superSpaceId ||
+            dGeomGetSpace(_o2) == self->superSpaceId ||
+            dGeomGetSpace(_o1) == self->raySpaceId ||
             dGeomGetSpace(_o2) == self->raySpaceId)
+        {
             dSpaceCollide2(_o1, _o2, self, &UpdateCallback);
+        }
+        return;
     }
-    else
-    {
+    else {
         ODECollision *collision1 = NULL;
         ODECollision *collision2 = NULL;
 
