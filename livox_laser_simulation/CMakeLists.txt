@@ -11,8 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   pcl_conversions
-  livox_ros_driver
-  message_generation
+  livox_interfaces
 )
 
 find_package(gazebo REQUIRED)
@@ -31,15 +30,6 @@ find_library(GAZEBO_RAY_PLUGIN
 if(NOT GAZEBO_RAY_PLUGIN)
   message(FATAL_ERROR "Gazebo RayPlugin library was not found")
 endif()
-add_message_files(FILES
-    CustomPoint.msg
-    CustomMsg.msg
-  #   Message2.msg
-  )
-
-generate_messages(DEPENDENCIES
-  std_msgs
-)
 #To solve the error which gazebo does not handle the include file well, we must add this line.
 include_directories(/usr/include/)
 
@@ -58,7 +48,7 @@ include_directories(
 catkin_package(
         INCLUDE_DIRS include
         LIBRARIES livox_laser_simulation
-        CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs pcl_conversions livox_ros_driver message_runtime
+        CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs pcl_conversions livox_interfaces
 )
 
 add_library(livox_laser_simulation SHARED src/livox_points_plugin.cpp src/livox_ode_multiray_shape.cpp)
@@ -73,7 +63,7 @@ install(TARGETS livox_laser_simulation
         LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 )
 
-install(DIRECTORY include/ msg/ launch/ models/ meshes/ rviz/ scan_mode/ worlds/
+install(DIRECTORY include/ launch/ models/ meshes/ rviz/ scan_mode/ worlds/
         DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
         OPTIONAL
 )

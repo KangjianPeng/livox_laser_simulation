@@ -5,7 +5,7 @@ Main changes:
 - Support for ROS Noetic
 - Support for Gazebo 11
 - Standalone
-    - The custom message is compatible with `livox_ros_driver/CustomMsg`
+    - The plugin publishes `livox_interfaces/CustomMsg`
     - The plugin itself does not connect to hardware or use the Livox SDK
 - Support for custom message formats
 - Corrected the distortion of the point cloud
